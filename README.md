@@ -466,7 +466,7 @@ Update the `baseUrl` variable if your server is running on a different port.
 
 **Arry**
 
-- GitHub: [@Arry](https://github.com/Arry)
+- GitHub: [@Arry](https://github.com/arry043)
 
 ---
 
