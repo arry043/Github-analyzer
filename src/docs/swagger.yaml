@@ -1,0 +1,509 @@
+openapi: 3.0.3
+info:
+  title: GitHub Profile Analyzer API
+  description: |
+    A production-ready backend service that analyzes GitHub user profiles
+    using the GitHub Public API and stores useful insights in a MySQL database.
+
+    ## Features
+    - Fetch and analyze GitHub profiles
+    - Score developers based on activity metrics
+    - Store and retrieve analysis results
+    - Leaderboard and aggregated statistics
+    - Pagination, sorting, and search
+  version: 1.0.0
+  contact:
+    name: Arry
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:5000
+    description: Local Development
+
+tags:
+  - name: Health
+    description: API health checks
+  - name: Analysis
+    description: Analyze GitHub profiles
+  - name: Profiles
+    description: Retrieve and manage analyzed profiles
+  - name: Statistics
+    description: Aggregated stats and leaderboard
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Returns the health status of the API.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: API is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: GitHub Profile Analyzer API is running.
+                  timestamp:
+                    type: string
+                    format: date-time
+                  environment:
+                    type: string
+                    example: development
+
+  /api/github/analyze/{username}:
+    post:
+      tags: [Analysis]
+      summary: Analyze a GitHub profile
+      description: |
+        Fetches a GitHub user's profile and repositories, generates insights
+        (score, summary, language breakdown), and stores the results in the database.
+        If the user has already been analyzed, the record is updated (upsert).
+      operationId: analyzeProfile
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: GitHub username to analyze
+          schema:
+            type: string
+            example: torvalds
+      responses:
+        '200':
+          description: Profile analyzed or updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeResponse'
+              example:
+                success: true
+                message: Profile analyzed successfully.
+                data:
+                  id: 1
+                  username: torvalds
+                  name: Linus Torvalds
+                  analysis_score: 95
+                  total_stars: 12000
+                  followers: 200000
+        '400':
+          description: Invalid username
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Invalid username. Only alphanumeric characters and hyphens are allowed."
+        '404':
+          description: GitHub user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "GitHub user 'nonexistentuser123456' not found."
+        '429':
+          description: GitHub API rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/github/profiles:
+    get:
+      tags: [Profiles]
+      summary: Get all analyzed profiles
+      description: |
+        Retrieve all analyzed profiles with pagination, sorting, and search support.
+      operationId: getAllProfiles
+      parameters:
+        - name: page
+          in: query
+          description: Page number (1-indexed)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Number of results per page (max 100)
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+        - name: sortBy
+          in: query
+          description: Column to sort by
+          schema:
+            type: string
+            default: analyzed_at
+            enum:
+              - username
+              - followers
+              - public_repos
+              - total_stars
+              - total_forks
+              - analysis_score
+              - analyzed_at
+        - name: sortOrder
+          in: query
+          description: Sort direction
+          schema:
+            type: string
+            default: desc
+            enum: [asc, desc]
+        - name: search
+          in: query
+          description: Search term (matches username, name, location, bio)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of analyzed profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileListResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/github/profiles/{username}:
+    get:
+      tags: [Profiles]
+      summary: Get a single analyzed profile
+      description: Retrieve a previously analyzed profile by GitHub username.
+      operationId: getProfile
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: GitHub username
+          schema:
+            type: string
+            example: torvalds
+      responses:
+        '200':
+          description: Profile data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleProfileResponse'
+        '400':
+          description: Invalid username
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Profile not found in database
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Analyzed profile for 'unknownuser' not found."
+
+    delete:
+      tags: [Profiles]
+      summary: Delete an analyzed profile
+      description: Remove a previously analyzed profile from the database.
+      operationId: deleteProfile
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: GitHub username
+          schema:
+            type: string
+            example: torvalds
+      responses:
+        '200':
+          description: Profile deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Profile 'torvalds' deleted successfully."
+        '400':
+          description: Invalid username
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/github/stats:
+    get:
+      tags: [Statistics]
+      summary: Get aggregated statistics
+      description: Returns aggregated statistics across all analyzed profiles.
+      operationId: getStats
+      responses:
+        '200':
+          description: Statistics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+              example:
+                success: true
+                data:
+                  totalProfiles: 42
+                  averageFollowers: 1250.50
+                  averageRepos: 35.20
+                  averageScore: 62.30
+                  topDevelopers:
+                    - username: torvalds
+                      name: Linus Torvalds
+                      analysis_score: 95
+                      followers: 200000
+                      total_stars: 12000
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/github/leaderboard:
+    get:
+      tags: [Statistics]
+      summary: Get developer leaderboard
+      description: Returns the top 10 developers ranked by analysis score.
+      operationId: getLeaderboard
+      responses:
+        '200':
+          description: Leaderboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaderboardResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    Profile:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        github_id:
+          type: integer
+          format: int64
+          example: 1024025
+        username:
+          type: string
+          example: torvalds
+        name:
+          type: string
+          example: Linus Torvalds
+        bio:
+          type: string
+          nullable: true
+        company:
+          type: string
+          nullable: true
+        location:
+          type: string
+          example: Portland, OR
+        blog:
+          type: string
+          nullable: true
+        avatar_url:
+          type: string
+          format: uri
+        profile_url:
+          type: string
+          format: uri
+        public_repos:
+          type: integer
+        followers:
+          type: integer
+        following:
+          type: integer
+        public_gists:
+          type: integer
+        account_created_at:
+          type: string
+          format: date-time
+        last_github_update:
+          type: string
+          format: date-time
+        repos_analyzed:
+          type: integer
+        total_stars:
+          type: integer
+        total_forks:
+          type: integer
+        most_starred_repo:
+          type: string
+        most_starred_repo_stars:
+          type: integer
+        average_stars_per_repo:
+          type: number
+          format: decimal
+        average_forks_per_repo:
+          type: number
+          format: decimal
+        top_languages:
+          type: array
+          items:
+            type: object
+            properties:
+              language:
+                type: string
+              count:
+                type: integer
+              percentage:
+                type: string
+        analysis_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        analysis_summary:
+          type: string
+        analyzed_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AnalyzeResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/Profile'
+
+    SingleProfileResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/Profile'
+
+    ProfileListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        count:
+          type: integer
+        pagination:
+          type: object
+          properties:
+            currentPage:
+              type: integer
+            totalPages:
+              type: integer
+            totalItems:
+              type: integer
+            itemsPerPage:
+              type: integer
+            hasNextPage:
+              type: boolean
+            hasPrevPage:
+              type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Profile'
+
+    StatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            totalProfiles:
+              type: integer
+            averageFollowers:
+              type: number
+            averageRepos:
+              type: number
+            averageScore:
+              type: number
+            topDevelopers:
+              type: array
+              items:
+                type: object
+                properties:
+                  username:
+                    type: string
+                  name:
+                    type: string
+                  analysis_score:
+                    type: integer
+                  followers:
+                    type: integer
+                  total_stars:
+                    type: integer
+
+    LeaderboardResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        count:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Profile'
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        error:
+          type: string
+          description: Stack trace (development only)
