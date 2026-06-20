@@ -76,7 +76,7 @@ Use cases:
 ## 🏗 Architecture
 
 The project follows a **layered architecture** with the **repository pattern**:
-
+.
 ```
 Request → Routes → Controller → Service → Repository → MySQL
                                   ↓
