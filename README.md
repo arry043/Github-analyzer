@@ -1,6 +1,6 @@
 # 🔍 GitHub Profile Analyzer API
 
-A **production-ready** backend service that analyzes GitHub user profiles using the GitHub Public API and stores useful insights in a MySQL database.
+A **production-ready** backend service that analyzes GitHub user profiles using the GitHub Public API and stores useful insights in a MySQL.
 
 ---
 
